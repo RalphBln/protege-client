@@ -12,8 +12,10 @@ import org.protege.owl.server.api.exception.OWLServerException;
 import org.protege.owl.server.connect.rmi.RMIClient;
 import org.protege.owl.server.util.ClientUtilities;
 import org.semanticweb.owlapi.apibinding.OWLManager;
+import org.semanticweb.owlapi.io.OWLFunctionalSyntaxOntologyFormat;
 import org.semanticweb.owlapi.model.IRI;
 import org.semanticweb.owlapi.model.OWLOntology;
+import org.semanticweb.owlapi.model.OWLOntologyCreationException;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
 
 import javax.swing.*;
@@ -25,8 +27,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.*;
 
 public class OpenFromServerDialog extends JDialog {
 
@@ -297,6 +298,16 @@ public class OpenFromServerDialog extends JDialog {
 	protected void openOntologyDocument() {
 		try {
 			int row = serverContentTable.getSelectedRow();
+
+			HashMap<String, RemoteOntologyDocument> serverOntologiesByLocalName = new HashMap<>();
+			for (int i=0; i < tableModel.getRowCount(); i++) {
+				RemoteServerDocument doc = tableModel.getValueAt(i);
+				if (doc instanceof RemoteOntologyDocument) {
+					serverOntologiesByLocalName.put(doc.getServerLocation().getShortForm().replaceFirst("\\.history$", ""), (RemoteOntologyDocument) doc);
+				}
+			}
+
+
 			if(row != -1) {
 				RemoteServerDocument doc = tableModel.getValueAt(row);
 				if (doc instanceof RemoteOntologyDocument) {
@@ -304,6 +315,9 @@ public class OpenFromServerDialog extends JDialog {
 					ServerConnectionManager connectionManager = ServerConnectionManager.get(editorKit);
 					VersionedOntologyDocument vont = ClientUtilities.loadOntology(client, editorKit.getOWLModelManager().getOWLOntologyManager(), remoteOntology);
 					connectionManager.addVersionedOntology(vont);
+
+					handleImports(vont.getOntology(), serverOntologiesByLocalName, connectionManager);
+
 					editorKit.getOWLModelManager().setActiveOntology(vont.getOntology());
 					OpenFromServerDialog.this.setVisible(false);
 				}
@@ -314,6 +328,20 @@ public class OpenFromServerDialog extends JDialog {
 		} catch (Exception ex) {
 			ErrorLogPanel.showErrorDialog(ex);
 		}
+	}
+
+	private void handleImports(OWLOntology ont, Map<String, RemoteOntologyDocument> serverOntologiesByLocalName, ServerConnectionManager connectionManager) {
+		OWLOntologyManager man = ont.getOWLOntologyManager();
+		ont.getDirectImportsDocuments().stream().filter(iri -> serverOntologiesByLocalName.containsKey(iri.getShortForm()) && !man.contains(iri)).forEach(iri -> {
+			try {
+				VersionedOntologyDocument vont = ClientUtilities.loadOntology(client, editorKit.getOWLModelManager().getOWLOntologyManager(), serverOntologiesByLocalName.get(iri.getShortForm()));
+				connectionManager.addVersionedOntology(vont);
+				handleImports(vont.getOntology(), serverOntologiesByLocalName, connectionManager);
+			} catch (OWLOntologyCreationException | OWLServerException e) {
+				// fail silently
+				// TODO show a dialog or something
+			}
+		});
 	}
 	
 	private class UploadActionListener implements ActionListener {
