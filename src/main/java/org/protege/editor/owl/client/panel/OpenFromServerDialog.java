@@ -353,6 +353,10 @@ public class OpenFromServerDialog extends JDialog {
 			try {
 				VersionedOntologyDocument vont = ClientUtilities.loadOntology(client, editorKit.getOWLModelManager().getOWLOntologyManager(), serverOntologiesByLocalName.get(iri.getShortForm()));
 				connectionManager.addVersionedOntology(vont);
+
+				// prevent circles
+				serverOntologiesByLocalName.remove(iri.getShortForm());
+
 				handleImports(vont.getOntology(), serverOntologiesByLocalName, connectionManager);
 			} catch (OWLOntologyCreationException | OWLServerException e) {
 				// fail silently
