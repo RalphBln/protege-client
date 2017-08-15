@@ -5,7 +5,9 @@ import org.protege.editor.core.ui.util.UIUtil;
 import org.protege.editor.owl.OWLEditorKit;
 import org.protege.editor.owl.client.ClientPreferences;
 import org.protege.editor.owl.client.connect.ServerConnectionManager;
+import org.protege.editor.owl.model.MissingImportHandler;
 import org.protege.editor.owl.ui.UIHelper;
+import org.protege.editor.owl.ui.ontology.imports.missing.MissingImportHandlerUI;
 import org.protege.owl.server.api.ChangeMetaData;
 import org.protege.owl.server.api.client.*;
 import org.protege.owl.server.api.exception.OWLServerException;
@@ -18,6 +20,8 @@ import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyCreationException;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
 import java.awt.*;
@@ -313,6 +317,17 @@ public class OpenFromServerDialog extends JDialog {
 				if (doc instanceof RemoteOntologyDocument) {
 					RemoteOntologyDocument remoteOntology = (RemoteOntologyDocument) doc;
 					ServerConnectionManager connectionManager = ServerConnectionManager.get(editorKit);
+
+					// Yikes. But the MissingUmportHandlerUI seems to lock up every time it tries to open its confirmation dialog
+					editorKit.getOWLModelManager().setMissingImportHandler(new MissingImportHandler() {
+						@Nullable
+						@Override
+						public IRI getDocumentIRI(@Nonnull IRI ontologyIRI) {
+							return null;
+						}
+					});
+
+
 					VersionedOntologyDocument vont = ClientUtilities.loadOntology(client, editorKit.getOWLModelManager().getOWLOntologyManager(), remoteOntology);
 					connectionManager.addVersionedOntology(vont);
 
@@ -327,6 +342,8 @@ public class OpenFromServerDialog extends JDialog {
 			}
 		} catch (Exception ex) {
 			ErrorLogPanel.showErrorDialog(ex);
+		} finally {
+			editorKit.getOWLModelManager().setMissingImportHandler(new MissingImportHandlerUI(editorKit);
 		}
 	}
 
